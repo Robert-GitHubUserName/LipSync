@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Enhanced Viseme Demo</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body {
+      font-family: 'Inter', sans-serif;
+    }
+    #visemeDisplay {
+      min-height: 150px;
+      min-width: 150px;
+      background-color: #f3f4f6;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: 1px solid #d1d5db;
+    }
+    #visemeImage {
+      max-width: 150px;
+      height: auto;
+    }
+    .placeholder-img {
+      background-color: #e2e8f0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #94a3b8;
+      font-size: 0.875rem;
+      width: 150px;
+      height: 150px;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.7; }
+    }
+    .speaking-text {
+      animation: pulse 0.5s ease-in-out;
+      background-color: #83bbff;
+      padding: 0 2px;
+      border-radius: 3px;
+    }
+    .voice-settings {
+      background-color: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 0.5rem;
+      padding: 1rem;
+      margin-bottom: 1rem;
+    }
+    .phoneme-breakdown {
+      margin-top: 1rem;
+      padding: 1rem;
+      background-color: #f0f9ff;
+      border-radius: 0.5rem;
+      font-family: monospace;
+      max-height: 200px;
+      overflow-y: auto;
+    }
+    .phoneme-item {
+      display: inline-block;
+      margin: 0.25rem;
+      padding: 0.25rem 0.5rem;
+      background-color: #dbeafe;
+      border-radius: 0.25rem;
+      font-size: 0.875rem;
+    }
+    .viseme-indicator {
+      padding: 0 0.25rem;
+      background-color: #fef9c3;
+      border-radius: 0.25rem;
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body class="bg-gray-100 p-8 flex flex-col items-center justify-center min-h-screen">
+
+  <div class="max-w-lg w-full mx-auto bg-white p-6 rounded-lg shadow-md text-center">
+    <h1 class="text-2xl font-bold mb-4 text-blue-600">Enhanced Viseme Animation Demo</h1>
+
+    <div id="visemeDisplay" class="mb-4 inline-block rounded-md overflow-hidden">
+      <img id="visemeImage" src="./viseme-images/viseme-0.jpg" alt="Viseme" />
+    </div>
+
+    <details class="voice-settings mb-4 text-left">
+      <summary class="text-blue-600 font-semibold">Voice Settings</summary>
+      <div class="pt-2">
+        <div>
+          <label class="block">Voice:</label>
+          <select id="voiceSelect" class="w-full border p-2 rounded">
+            <option>Loading voices...</option>
+          </select>
+        </div>
+        <div>
+          <label>Rate: <span id="rateValue">1.0</span></label>
+          <input type="range" id="rateSlider" min="0.5" max="2" step="0.1" value="1.0" class="w-full">
+        </div>
+        <div>
+          <label>Pitch: <span id="pitchValue">1.0</span></label>
+          <input type="range" id="pitchSlider" min="0.5" max="2" step="0.1" value="1.0" class="w-full">
+        </div>
+        <div>
+          <label><input type="checkbox" id="showPhonemes"> Show phoneme breakdown</label>
+        </div>
+      </div>
+    </details>
+
+    <div>
+      <input id="textInput" class="border rounded-md p-2 w-full" value="Hello! This is an enhanced viseme animation demo." />
+    </div>
+
+    <button id="speakButton" class="mt-4 bg-green-500 text-white py-2 px-4 rounded hover:bg-green-600">
+      Speak
+    </button>
+
+    <div id="spokenTextDisplay" class="mt-4 text-gray-600 min-h-[2rem]"></div>
+    <div id="statusMessage" class="mt-4 text-sm text-gray-600"></div>
+
+    <div id="phonemeBreakdownContainer" class="phoneme-breakdown hidden">
+      <h3 class="text-sm font-semibold text-blue-700 mb-2">Phoneme Breakdown</h3>
+      <div id="phonemeBreakdown"></div>
+    </div>
+  </div>
+
+  <script src="viseme.js"></script>
+</body>
+</html>
