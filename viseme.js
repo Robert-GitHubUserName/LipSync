@@ -111,12 +111,26 @@ function loadVoices() {
             voiceSelect.value = 0;
         }
     }
+    loadSelectedVoice();
 }
 // Initialize voices (handle asynchronous loading in some browsers)
 if (speechSynthesis.onvoiceschanged !== undefined) {
     speechSynthesis.onvoiceschanged = loadVoices;
 } else {
     loadVoices();
+}
+
+// Save the selected voice to localStorage when the user changes the selection
+voiceSelect.addEventListener('change', () => {
+    localStorage.setItem('selectedVoice', voiceSelect.value);
+});
+
+// Load the selected voice from localStorage on page load
+function loadSelectedVoice() {
+    const savedVoice = localStorage.getItem('selectedVoice');
+    if (savedVoice !== null) {
+        voiceSelect.value = savedVoice;
+    }
 }
 
 // Create a placeholder element for missing images
@@ -675,7 +689,7 @@ function getWordPhonemes(word) {
             return phonemes;
         } else {
             const digitWord = digitToWord[word];
-            return wordToPhonemes[digitWord] || predictPhonemes(digitWord);
+            return wordToPhonemes[digitWord] || predictPhonemes[digitWord];
         }
     }
     // Punctuation token
@@ -758,7 +772,7 @@ function generateVisemeSequence(text) {
             currentTime += duration;
         });
         // Small pause after each token (longer if token was punctuation)
-        currentTime += /^[,\.!?;:\-()]$/.test(token) ? 120 : 50;
+        currentTime += /^[,\.!?;:\-()]$/.test(token) ? 50 : 20;
     });
     // Append a final silent viseme to close mouth at end
     visemeData.push({ time: currentTime, visemeId: 0, token: 'end', phoneme: 'silence' });
