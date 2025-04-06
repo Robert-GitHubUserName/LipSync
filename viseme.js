@@ -555,6 +555,60 @@ function speakText(text) {
     speechSynthesis.speak(utterance);
 }
 
+function speakTextWithPhonemeTracking(text) {
+    if (!text) return;
+
+    clearAllTimeouts();
+    speechSynthesis.cancel();
+    setVisemeImage(0);
+    spokenTextDisplay.textContent = text;
+    speakButton.disabled = true;
+    isSpeaking = true;
+
+    const utterance = new SpeechSynthesisUtterance(text);
+    const voices = speechSynthesis.getVoices();
+
+    if (voices.length && voiceSelect.value) {
+        utterance.voice = voices[parseInt(voiceSelect.value, 10)];
+    }
+
+    utterance.rate = parseFloat(rateSlider.value);
+    utterance.pitch = parseFloat(pitchSlider.value);
+
+    utterance.onstart = () => {
+        statusMessage.textContent = 'Speaking...';
+    };
+
+    utterance.onboundary = (event) => {
+        if (event.name === 'word') {
+            highlightCurrentWord(text, event.charIndex, event.charLength || text.slice(event.charIndex).search(/[\s,.!?;:\-()]/) || text.length - event.charIndex);
+        } else if (event.name === 'phoneme') {
+            // Handle phoneme-level boundary (if supported)
+            const phoneme = text.slice(event.charIndex, event.charIndex + event.charLength).trim().toLowerCase();
+            const visemeId = getVisemeFromPhoneme(phoneme);
+            setVisemeImage(visemeId);
+        }
+    };
+
+    utterance.onend = () => {
+        isSpeaking = false;
+        statusMessage.textContent = 'Done speaking';
+        clearAllTimeouts();
+        spokenTextDisplay.textContent = text;
+        setTimeout(() => setVisemeImage(0), 25);
+        speakButton.disabled = false;
+    };
+
+    utterance.onerror = (e) => {
+        console.error('Speech error:', e);
+        isSpeaking = false;
+        statusMessage.textContent = 'Speech error occurred';
+        speakButton.disabled = false;
+    };
+
+    speechSynthesis.speak(utterance);
+}
+
 // Check for presence of viseme images in the local folder
 function checkForVisemeImages() {
     const testImage = new Image();
