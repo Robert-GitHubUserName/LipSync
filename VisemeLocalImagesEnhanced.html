@@ -4,33 +4,35 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Enhanced Viseme Demo</title>
-  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Replace Tailwind with local Bootstrap -->
+  <link rel="stylesheet" href="./bootstrap.min.css">
   <style>
     body {
-      font-family: 'Inter', sans-serif;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     }
     #visemeDisplay {
       min-height: 150px;
       min-width: 150px;
-      background-color: #f3f4f6;
+      background-color: #f8f9fa;
       display: flex;
       align-items: center;
       justify-content: center;
-      border: 1px solid #d1d5db;
+      border: 1px solid #dee2e6;
     }
     #visemeImage {
       max-width: 150px;
       height: auto;
     }
     .placeholder-img {
-      background-color: #e2e8f0;
+      background-color: #e9ecef;
       display: flex;
       align-items: center;
       justify-content: center;
-      color: #94a3b8;
+      color: #6c757d;
       font-size: 0.875rem;
       width: 150px;
       height: 150px;
+      border-radius: 0.25rem;
     }
     @keyframes pulse {
       0%, 100% { opacity: 1; }
@@ -43,8 +45,8 @@
       border-radius: 3px;
     }
     .voice-settings {
-      background-color: #f8fafc;
-      border: 1px solid #e2e8f0;
+      background-color: #f8f9fa;
+      border: 1px solid #dee2e6;
       border-radius: 0.5rem;
       padding: 1rem;
       margin-bottom: 1rem;
@@ -78,56 +80,161 @@
       transform: scale(1.05);
       transition: all 0.1s ease-in-out;
     }
+    /* Ensure the hidden class works properly */
+    .hidden {
+      display: none !important;
+    }
+    /* Toggle switch styling */
+    .form-switch {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      margin-bottom: 0;
+    }
+    .form-switch .form-check-input {
+      width: 3em;
+      height: 1.5em;
+      margin-left: 0.5em;
+      cursor: pointer;
+    }
+    .form-switch .form-check-label {
+      cursor: pointer;
+      margin-right: 0.75em;
+    }
+    /* Bootstrap-style collapsible header */
+    .card-header .btn-link {
+        color: #0d6efd;
+        text-decoration: none;
+        width: 100%;
+        text-align: left;
+        position: relative;
+        padding-right: 1.25rem;
+    }
+    
+    .card-header .btn-link::after {
+        content: "";
+        position: absolute;
+        right: 0;
+        top: 50%;
+        transform: translateY(-50%);
+        width: 0.5rem;
+        height: 0.5rem;
+        border-bottom: 1px solid currentColor;
+        border-right: 1px solid currentColor;
+        margin-right: 0.5rem;
+        transition: transform 0.2s ease-in-out;
+        transform-origin: center;
+        transform: translateY(-50%) rotate(45deg);
+    }
+    
+    .card-header .btn-link.collapsed::after {
+        transform: translateY(-50%) rotate(-45deg);
+    }
   </style>
 </head>
-<body class="bg-gray-100 p-8 flex flex-col items-center justify-center min-h-screen">
+<body class="bg-light p-3">
 
-  <div class="max-w-lg w-full mx-auto bg-white p-6 rounded-lg shadow-md text-center">
-    <h1 class="text-2xl font-bold mb-4 text-blue-600">Enhanced Viseme Animation Demo</h1>
+  <div class="container">
+    <div class="row justify-content-center">
+      <div class="col-md-8">
+        <div class="card shadow">
+          <div class="card-body text-center">
+            <h1 class="card-title text-primary mb-4">Enhanced Viseme Animation Demo</h1>
 
-    <div id="visemeDisplay" class="mb-4 inline-block rounded-md overflow-hidden">
-      <img id="visemeImage" src="./viseme-images/viseme-0.jpg" alt="Viseme" />
-    </div>
+            <div id="visemeDisplay" class="mb-4 d-inline-block rounded overflow-hidden">
+              <img id="visemeImage" src="./viseme-images/viseme-0.jpg" alt="Viseme" />
+            </div>
 
-    <details class="voice-settings mb-4 text-left">
-      <summary class="text-blue-600 font-semibold">Voice Settings</summary>
-      <div class="pt-2">
-        <div>
-          <label class="block">Voice:</label>
-          <select id="voiceSelect" class="w-full border p-2 rounded">
-            <option>Loading voices...</option>
-          </select>
-        </div>
-        <div>
-          <label>Rate: <span id="rateValue">1.0</span></label>
-          <input type="range" id="rateSlider" min="0.5" max="2" step="0.1" value="1.0" class="w-full">
-        </div>
-        <div>
-          <label>Pitch: <span id="pitchValue">1.0</span></label>
-          <input type="range" id="pitchSlider" min="0.5" max="2" step="0.1" value="1.0" class="w-full">
-        </div>
-        <div>
-          <label><input type="checkbox" id="showPhonemes"> Show phoneme breakdown</label>
+            <div class="card mb-4">
+              <div class="card-header bg-light" id="voice-settings-header">
+                <button class="btn btn-link" id="voice-settings-toggle">
+                  Voice Settings
+                </button>
+              </div>
+              <div id="voice-settings" class="collapse">
+                <div class="card-body">
+                  <div class="mb-3">
+                    <label for="voiceSelect" class="form-label">Voice:</label>
+                    <select id="voiceSelect" class="form-select">
+                      <option>Loading voices...</option>
+                    </select>
+                  </div>
+                  <div class="mb-3">
+                    <label for="rateSlider" class="form-label">Rate: <span id="rateValue">1.0</span></label>
+                    <input type="range" id="rateSlider" class="form-range" min="0.5" max="2" step="0.1" value="1.0">
+                  </div>
+                  <div class="mb-3">
+                    <label for="pitchSlider" class="form-label">Pitch: <span id="pitchValue">1.0</span></label>
+                    <input type="range" id="pitchSlider" class="form-range" min="0.5" max="2" step="0.1" value="1.0">
+                  </div>
+                  <div class="form-switch d-flex justify-content-end align-items-center border-top pt-3">
+                    <label for="showPhonemes" class="form-check-label">Show phoneme breakdown</label>
+                    <div class="form-check form-switch">
+                      <input type="checkbox" id="showPhonemes" class="form-check-input" role="switch">
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="mb-3">
+              <input id="textInput" class="form-control" value="Hello! This is an enhanced viseme animation demo." />
+            </div>
+
+            <button id="speakButton" class="btn btn-success">
+              Speak
+            </button>
+
+            <div id="spokenTextDisplay" class="mt-3 text-muted min-height-2"></div>
+            <div id="statusMessage" class="mt-2 small text-muted"></div>
+
+            <div id="phonemeBreakdownContainer" class="phoneme-breakdown hidden mt-4">
+              <h6 class="text-primary mb-2">Phoneme Breakdown</h6>
+              <div id="phonemeBreakdown"></div>
+            </div>
+          </div>
         </div>
       </div>
-    </details>
-
-    <div>
-      <input id="textInput" class="border rounded-md p-2 w-full" value="Hello! This is an enhanced viseme animation demo." />
-    </div>
-
-    <button id="speakButton" class="mt-4 bg-green-500 text-white py-2 px-4 rounded hover:bg-green-600">
-      Speak
-    </button>
-
-    <div id="spokenTextDisplay" class="mt-4 text-gray-600 min-h-[2rem]"></div>
-    <div id="statusMessage" class="mt-4 text-sm text-gray-600"></div>
-
-    <div id="phonemeBreakdownContainer" class="phoneme-breakdown hidden">
-      <h3 class="text-sm font-semibold text-blue-700 mb-2">Phoneme Breakdown</h3>
-      <div id="phonemeBreakdown"></div>
     </div>
   </div>
+
+  <script>
+    // Improved toggler that matches Bootstrap's behavior
+    document.addEventListener('DOMContentLoaded', function() {
+      const toggle = document.getElementById('voice-settings-toggle');
+      const voiceSettings = document.getElementById('voice-settings');
+      
+      // Initialize state
+      toggle.classList.add('collapsed');
+      
+      // Toggle handler
+      toggle.addEventListener('click', function() {
+        const isExpanded = voiceSettings.style.display === 'block';
+        
+        // Toggle visibility
+        voiceSettings.style.display = isExpanded ? 'none' : 'block';
+        
+        // Toggle class for arrow direction
+        toggle.classList.toggle('collapsed', !isExpanded);
+        
+        // Update ARIA attributes to match Bootstrap
+        toggle.setAttribute('aria-expanded', !isExpanded);
+      });
+      
+      // Ensure phoneme breakdown is hidden by default and only shows when checkbox is clicked
+      const phonemeBreakdownContainer = document.getElementById('phonemeBreakdownContainer');
+      const showPhonemesCheckbox = document.getElementById('showPhonemes');
+      
+      // Ensure it's hidden on page load
+      phonemeBreakdownContainer.classList.add('hidden');
+      showPhonemesCheckbox.checked = false;
+      
+      // Add event listener to toggle visibility based on checkbox
+      showPhonemesCheckbox.addEventListener('change', function() {
+        phonemeBreakdownContainer.classList.toggle('hidden', !this.checked);
+      });
+    });
+  </script>
 
   <script type="module" src="main.js"></script>
 </body>
