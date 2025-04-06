@@ -4,6 +4,10 @@ import { checkSpeechSupport, initializeVoices, saveSelectedVoice } from './speec
 import { clearAllTimeouts, clearHighlightTimeouts, generateVisemeSequence, highlightWord, isSpeaking, animationTimeouts, wordBoundaryEvents, setLanguageTimingParams } from './animationController.js';
 import { getWordPhonemes, getVisemeFromPhoneme } from './phonemeProcessor.js';
 
+// Store animation state
+let googleTimeouts = []; // Specific for Google voice timeouts
+let isChromeBrowser = /Chrome/.test(navigator.userAgent) && !/Edge/.test(navigator.userAgent);
+
 // Language detection parameters
 const languagePatterns = {
     english: /^[a-zA-Z0-9\s.,!?;:()\-'"]+$/,
@@ -126,6 +130,7 @@ function speakText(text) {
     if (!text) return;
 
     clearAllTimeouts();
+    clearGoogleTimeouts(); // Clear Google-specific timeouts
     speechSynthesis.cancel();
     setVisemeImage(0);
     spokenTextDisplay.textContent = text;
@@ -142,6 +147,7 @@ function speakText(text) {
     // Get all available voices
     const voices = speechSynthesis.getVoices();
     let voiceLang = '';
+    let isGoogleVoice = false;
     
     // Only set a voice if we have valid voices and a valid selection
     if (voices.length > 0 && voiceSelect.value !== '') {
@@ -149,6 +155,10 @@ function speakText(text) {
         if (!isNaN(voiceIndex) && voiceIndex >= 0 && voiceIndex < voices.length) {
             utterance.voice = voices[voiceIndex];
             voiceLang = voices[voiceIndex].lang;
+            
+            // Check if this is a Google voice
+            isGoogleVoice = voices[voiceIndex].name.includes('Google') || 
+                           voices[voiceIndex].voiceURI.includes('google');
         }
     }
 
@@ -161,106 +171,116 @@ function speakText(text) {
     utterance.rate = parseFloat(rateSlider.value);
     utterance.pitch = parseFloat(pitchSlider.value);
 
-    // Enhanced boundary handler for both word highlighting and viseme animation
-    utterance.onboundary = (event) => {
-        if (event.name === 'word') {
-            // Get the current word from the text based on character index
-            const currentWordText = text.substring(event.charIndex, event.charIndex + event.charLength).trim();
-            
-            if (currentWordText) {
-                // Find the word index in our tokens
-                let wordIndex = -1;
-                let charCount = 0;
+    // For Google voices, use a timer-based approach instead of boundary events
+    if (isGoogleVoice && isChromeBrowser) {
+        handleGoogleVoice(text, visemeSequence, utterance.rate);
+    } else {
+        // Enhanced boundary handler for standard voices
+        utterance.onboundary = (event) => {
+            if (event.name === 'word') {
+                // Get the current word from the text based on character index
+                const currentWordText = text.substring(event.charIndex, event.charIndex + event.charLength).trim();
                 
-                // Use a more sophisticated tokenization that keeps punctuation with words
-                const tokens = text.split(/\s+/).map(token => token.trim()).filter(token => token.length > 0);
-                
-                // Find which token contains the current character index
-                for (let i = 0; i < tokens.length; i++) {
-                    // Calculate the end position of this token (including spaces)
-                    const endPos = charCount + tokens[i].length;
+                if (currentWordText) {
+                    // Find the word index in our tokens
+                    let wordIndex = -1;
+                    let charCount = 0;
                     
-                    // Check if the event's character index falls within this token
-                    // or if the token contains the current word text
-                    if ((charCount <= event.charIndex && event.charIndex < endPos) || 
-                        (tokens[i].includes(currentWordText))) {
-                        wordIndex = i;
-                        break;
-                    }
+                    // Use a more sophisticated tokenization that keeps punctuation with words
+                    const tokens = text.split(/\s+/).map(token => token.trim()).filter(token => token.length > 0);
                     
-                    // Move to the next token position
-                    charCount += tokens[i].length + 1; // +1 for the space
-                }
-                
-                if (wordIndex >= 0) {
-                    // Highlight the current word
-                    highlightWord(wordIndex, text);
-                    
-                    // Extract and animate the viseme sequence for this word
-                    const cleanWord = currentWordText.replace(/[^\w\s]/g, '').toLowerCase();
-                    const phonemes = getWordPhonemes(cleanWord);
-                    
-                    if (phonemes.length > 0) {
-                        // Set immediate viseme for the first phoneme
-                        const firstVisemeId = getVisemeFromPhoneme(phonemes[0]);
-                        setVisemeImage(firstVisemeId);
+                    // Find which token contains the current character index
+                    for (let i = 0; i < tokens.length; i++) {
+                        // Calculate the end position of this token (including spaces)
+                        const endPos = charCount + tokens[i].length;
                         
-                        // Check if the word has ending punctuation
-                        const hasPunctuation = /[.!?,;:]$/.test(tokens[wordIndex]);
-                        
-                        // Schedule the remaining visemes in this word with appropriate timing
-                        const totalDuration = (event.charLength * 70) / utterance.rate; // estimate 70ms per character, adjusted for rate
-                        
-                        // If this word has punctuation, we'll reserve some time at the end to close the mouth
-                        const effectivePhonemeCount = hasPunctuation ? phonemes.length + 1 : phonemes.length;
-                        const phonemeDuration = totalDuration / effectivePhonemeCount;
-                        
-                        // Clear any previously scheduled viseme timeouts to avoid conflicts
-                        for (const timeout of animationTimeouts) {
-                            clearTimeout(timeout);
+                        // Check if the event's character index falls within this token
+                        // or if the token contains the current word text
+                        if ((charCount <= event.charIndex && event.charIndex < endPos) || 
+                            (tokens[i].includes(currentWordText))) {
+                            wordIndex = i;
+                            break;
                         }
                         
-                        // Empty the array without reassigning it
-                        animationTimeouts.splice(0, animationTimeouts.length);
+                        // Move to the next token position
+                        charCount += tokens[i].length + 1; // +1 for the space
+                    }
+                    
+                    if (wordIndex >= 0) {
+                        // Highlight the current word
+                        highlightWord(wordIndex, text);
                         
-                        // Schedule visemes throughout the word duration
-                        phonemes.slice(1).forEach((phoneme, idx) => {
-                            const visemeId = getVisemeFromPhoneme(phoneme);
-                            const delay = (idx + 1) * phonemeDuration;
-                            
-                            // Create a timeout for this viseme
-                            const timeout = setTimeout(() => {
-                                setVisemeImage(visemeId);
-                                if (showPhonemesCheckbox.checked) {
-                                    console.debug(`Showing viseme ${visemeId} for phoneme ${phoneme}`);
-                                }
-                            }, delay);
-                            
-                            // Add to our animation timeouts array
-                            animationTimeouts.push(timeout);
-                        });
+                        // Extract and animate the viseme sequence for this word
+                        const cleanWord = currentWordText.replace(/[^\w\s]/g, '').toLowerCase();
+                        const phonemes = getWordPhonemes(cleanWord);
                         
-                        // If word ends with punctuation, schedule a quick mouth close
-                        if (hasPunctuation) {
-                            const mouthCloseDelay = totalDuration - (phonemeDuration / 2); // Close mouth slightly before next word
-                            const timeout = setTimeout(() => {
-                                setVisemeImage(0); // Neutral mouth position (closed)
-                                if (showPhonemesCheckbox.checked) {
-                                    console.debug(`Closing mouth after punctuation in "${tokens[wordIndex]}"`);
-                                }
-                            }, mouthCloseDelay);
-                            animationTimeouts.push(timeout);
+                        if (phonemes.length > 0) {
+                            // Set immediate viseme for the first phoneme
+                            const firstVisemeId = getVisemeFromPhoneme(phonemes[0]);
+                            setVisemeImage(firstVisemeId);
+                            
+                            // Check if the word has ending punctuation
+                            const hasPunctuation = /[.!?,;:]$/.test(tokens[wordIndex]);
+                            
+                            // Schedule the remaining visemes in this word with appropriate timing
+                            const totalDuration = (event.charLength * 70) / utterance.rate; // estimate 70ms per character, adjusted for rate
+                            
+                            // If this word has punctuation, we'll reserve some time at the end to close the mouth
+                            const effectivePhonemeCount = hasPunctuation ? phonemes.length + 1 : phonemes.length;
+                            const phonemeDuration = totalDuration / effectivePhonemeCount;
+                            
+                            // Clear any previously scheduled viseme timeouts to avoid conflicts
+                            for (const timeout of animationTimeouts) {
+                                clearTimeout(timeout);
+                            }
+                            
+                            // Empty the array without reassigning it
+                            animationTimeouts.splice(0, animationTimeouts.length);
+                            
+                            // Schedule visemes throughout the word duration
+                            phonemes.slice(1).forEach((phoneme, idx) => {
+                                const visemeId = getVisemeFromPhoneme(phoneme);
+                                const delay = (idx + 1) * phonemeDuration;
+                                
+                                // Create a timeout for this viseme
+                                const timeout = setTimeout(() => {
+                                    setVisemeImage(visemeId);
+                                    if (showPhonemesCheckbox.checked) {
+                                        console.debug(`Showing viseme ${visemeId} for phoneme ${phoneme}`);
+                                    }
+                                }, delay);
+                                
+                                // Add to our animation timeouts array
+                                animationTimeouts.push(timeout);
+                            });
+                            
+                            // If word ends with punctuation, schedule a quick mouth close
+                            if (hasPunctuation) {
+                                const mouthCloseDelay = totalDuration - (phonemeDuration / 2); // Close mouth slightly before next word
+                                const timeout = setTimeout(() => {
+                                    setVisemeImage(0); // Neutral mouth position (closed)
+                                    if (showPhonemesCheckbox.checked) {
+                                        console.debug(`Closing mouth after punctuation in "${tokens[wordIndex]}"`);
+                                    }
+                                }, mouthCloseDelay);
+                                animationTimeouts.push(timeout);
+                            }
                         }
                     }
                 }
             }
-        }
+        };
+    }
+
+    utterance.onstart = () => {
+        statusMessage.textContent = `Speaking... (${isGoogleVoice ? 'Google voice' : detectedLanguage.charAt(0).toUpperCase() + detectedLanguage.slice(1)} detected)`;
     };
 
     utterance.onend = () => {
         window.isSpeaking = false;
         statusMessage.textContent = 'Done speaking';
         clearAllTimeouts();
+        clearGoogleTimeouts();
         spokenTextDisplay.textContent = text;
         setTimeout(() => setVisemeImage(0), 25);
         speakButton.disabled = false;
@@ -274,6 +294,57 @@ function speakText(text) {
     };
 
     speechSynthesis.speak(utterance);
+}
+
+// Special handling for Google voices which don't support boundary events
+function handleGoogleVoice(text, visemeSequence, speechRate) {
+    statusMessage.textContent = 'Speaking with Google voice (using time-based synchronization)';
+    
+    // Get tokens for word highlighting
+    const tokens = text.split(/\s+/).filter(token => token.trim().length > 0);
+    
+    // Estimate total speech duration based on text length and speech rate
+    const charCount = text.length;
+    const charsPerSecond = 15; // Average reading speed
+    const estimatedDuration = (charCount / charsPerSecond) / speechRate * 1000;
+    
+    // Schedule word highlighting at intervals throughout the speech
+    tokens.forEach((token, index) => {
+        const progress = index / tokens.length;
+        const highlightTime = progress * estimatedDuration;
+        
+        const timeout = setTimeout(() => {
+            highlightWord(index, text);
+        }, highlightTime);
+        
+        googleTimeouts.push(timeout);
+    });
+    
+    // Schedule viseme animations based on their relative timing
+    const lastVisemeTime = visemeSequence[visemeSequence.length - 1].time;
+    
+    visemeSequence.forEach(({ visemeId, time }) => {
+        const scaledTime = (time / lastVisemeTime) * estimatedDuration;
+        
+        const timeout = setTimeout(() => {
+            setVisemeImage(visemeId);
+        }, scaledTime);
+        
+        googleTimeouts.push(timeout);
+    });
+    
+    // Ensure mouth returns to neutral position at the end
+    const finalTimeout = setTimeout(() => {
+        setVisemeImage(0);
+    }, estimatedDuration + 200); // Add a little buffer
+    
+    googleTimeouts.push(finalTimeout);
+}
+
+// Clear Google-specific timeouts
+function clearGoogleTimeouts() {
+    googleTimeouts.forEach(timeout => clearTimeout(timeout));
+    googleTimeouts = [];
 }
 
 // Handle Speak button clicks
