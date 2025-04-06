@@ -1,5 +1,6 @@
 import { imageUrls } from './config.js';
 import { visemeImage, visemeDisplay, statusMessage } from './domElements.js';
+import { highlightCurrentPhoneme } from './phonemeProcessor.js';
 
 let currentVisemeId = 0; // Track the current viseme ID
 
@@ -12,10 +13,19 @@ export function createPlaceholder() {
 }
 
 // Set the viseme image (mouth shape) by ID, with fallback for missing images
-export function setVisemeImage(visemeId) {
+export function setVisemeImage(visemeId, phonemeInfo) {
     // Store the previous viseme ID for transition logic
     const previousVisemeId = currentVisemeId;
     currentVisemeId = visemeId;
+    
+    // Highlight the current phoneme in the breakdown if provided
+    if (phonemeInfo && phonemeInfo.phoneme) {
+        highlightCurrentPhoneme(
+            phonemeInfo.phoneme,  // The phoneme
+            visemeId,             // The viseme ID
+            phonemeInfo.word      // The word context
+        );
+    }
     
     // Check if this is a dramatic viseme change that needs transition
     if (needsTransition(previousVisemeId, visemeId)) {

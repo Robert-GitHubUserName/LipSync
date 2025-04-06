@@ -242,14 +242,99 @@ export function getWordPhonemes(word) {
     return predictPhonemes(word);
 }
 
-// Display the phoneme breakdown in the UI (list phonemes with viseme IDs)
+// Track the currently active phoneme for sequential highlighting
+let currentPhonemeIndex = -1;
+
+// Display the phoneme breakdown in the UI with sequential indices
 export function displayPhonemeBreakdown(phonemeData) {
     phonemeBreakdown.innerHTML = '';
-    phonemeData.forEach(item => {
+    
+    // Reset the phoneme index
+    currentPhonemeIndex = -1;
+    
+    phonemeData.forEach((item, index) => {
         if (item.phoneme === 'silence') return;  // skip final silence
+        
         const span = document.createElement('span');
         span.className = 'phoneme-item';
+        span.id = `phoneme-${index}`;
+        span.dataset.phoneme = item.phoneme;
+        span.dataset.visemeId = item.visemeId;
+        span.dataset.time = item.time;
+        span.dataset.index = index; // Store the sequential index
+        span.dataset.word = item.word || ''; // Store the word context
+        
         span.innerHTML = `${item.phoneme.toUpperCase()} <span class="viseme-indicator">${item.visemeId}</span>`;
+        
         phonemeBreakdown.appendChild(span);
+    });
+}
+
+// Highlight the currently active phoneme in the breakdown using sequential logic
+export function highlightCurrentPhoneme(phoneme, visemeId, wordContext) {
+    // First, find all matching phonemes
+    const matchingElements = Array.from(
+        document.querySelectorAll(`.phoneme-item[data-phoneme="${phoneme}"][data-viseme-id="${visemeId}"]`)
+    );
+    
+    // If we have word context and matching elements with that word, filter to only those
+    if (wordContext && matchingElements.some(el => el.dataset.word === wordContext)) {
+        const wordMatchingElements = matchingElements.filter(el => el.dataset.word === wordContext);
+        if (wordMatchingElements.length > 0) {
+            matchingElements.length = 0; // Clear the array
+            matchingElements.push(...wordMatchingElements); // Replace with word-specific matches
+        }
+    }
+    
+    if (matchingElements.length === 0) return;
+    
+    // Sort elements by their numeric index to ensure proper order
+    matchingElements.sort((a, b) => parseInt(a.dataset.index) - parseInt(b.dataset.index));
+    
+    // Find the next element after the current highlighted one
+    let nextElement = null;
+    
+    // If we have a current phoneme and it's not the last one
+    if (currentPhonemeIndex >= 0) {
+        // Find elements that come after the current one
+        const nextElements = matchingElements.filter(
+            el => parseInt(el.dataset.index) > currentPhonemeIndex
+        );
+        
+        if (nextElements.length > 0) {
+            // Take the first one that comes after
+            nextElement = nextElements[0];
+        } else {
+            // If there are no more after the current, take the first matching one
+            // (this handles repeating phonemes when cycling back)
+            nextElement = matchingElements[0];
+        }
+    } else {
+        // If no current phoneme, start with the first matching one
+        nextElement = matchingElements[0];
+    }
+    
+    // Remove active class from all phonemes
+    document.querySelectorAll('.phoneme-item.active').forEach(el => {
+        el.classList.remove('active');
+    });
+    
+    // Add active class to the selected element
+    if (nextElement) {
+        nextElement.classList.add('active');
+        currentPhonemeIndex = parseInt(nextElement.dataset.index);
+        
+        // Ensure the highlighted element is visible (scroll if needed)
+        if (phonemeBreakdown && phonemeBreakdown.scrollHeight > phonemeBreakdown.clientHeight) {
+            nextElement.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+    }
+}
+
+// Reset the phoneme highlighting (call when speech stops)
+export function resetPhonemeHighlighting() {
+    currentPhonemeIndex = -1;
+    document.querySelectorAll('.phoneme-item.active').forEach(el => {
+        el.classList.remove('active');
     });
 }

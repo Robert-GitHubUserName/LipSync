@@ -2,7 +2,7 @@ import { speakButton, textInput, statusMessage, spokenTextDisplay, rateSlider, p
 import { setVisemeImage, checkForVisemeImages } from './visemeManager.js';
 import { checkSpeechSupport, initializeVoices, saveSelectedVoice } from './speechManager.js';
 import { clearAllTimeouts, clearHighlightTimeouts, generateVisemeSequence, highlightWord, isSpeaking, animationTimeouts, wordBoundaryEvents, setLanguageTimingParams } from './animationController.js';
-import { getWordPhonemes, getVisemeFromPhoneme } from './phonemeProcessor.js';
+import { getWordPhonemes, getVisemeFromPhoneme, highlightCurrentPhoneme, resetPhonemeHighlighting } from './phonemeProcessor.js';
 
 // Store animation state
 let googleTimeouts = []; // Specific for Google voice timeouts
@@ -223,7 +223,10 @@ function speakText(text) {
                         if (phonemes.length > 0) {
                             // Set immediate viseme for the first phoneme
                             const firstVisemeId = getVisemeFromPhoneme(phonemes[0]);
-                            setVisemeImage(firstVisemeId);
+                            setVisemeImage(firstVisemeId, { 
+                                phoneme: phonemes[0], 
+                                word: cleanWord 
+                            });
                             
                             // Check if the word has ending punctuation
                             const hasPunctuation = /[.!?,;:]$/.test(tokens[wordIndex]);
@@ -248,9 +251,12 @@ function speakText(text) {
                                 const visemeId = getVisemeFromPhoneme(phoneme);
                                 const delay = (idx + 1) * phonemeDuration;
                                 
-                                // Create a timeout for this viseme
+                                // Create a timeout for this viseme with word context
                                 const timeout = setTimeout(() => {
-                                    setVisemeImage(visemeId);
+                                    setVisemeImage(visemeId, { 
+                                        phoneme: phoneme, 
+                                        word: cleanWord 
+                                    });
                                     if (showPhonemesCheckbox.checked) {
                                         console.debug(`Showing viseme ${visemeId} for phoneme ${phoneme}`);
                                     }
@@ -288,6 +294,7 @@ function speakText(text) {
         clearAllTimeouts();
         clearGoogleTimeouts();
         spokenTextDisplay.textContent = text;
+        resetPhonemeHighlighting(); // Reset the phoneme highlighting
         setTimeout(() => setVisemeImage(0), 25);
         speakButton.disabled = false;
     };
@@ -329,11 +336,15 @@ function handleGoogleVoice(text, visemeSequence, speechRate) {
     // Schedule viseme animations based on their relative timing
     const lastVisemeTime = visemeSequence[visemeSequence.length - 1].time;
     
-    visemeSequence.forEach(({ visemeId, time }) => {
+    visemeSequence.forEach(({ visemeId, time, phoneme, token }) => {
         const scaledTime = (time / lastVisemeTime) * estimatedDuration;
         
         const timeout = setTimeout(() => {
-            setVisemeImage(visemeId);
+            // Pass both phoneme and word context
+            setVisemeImage(visemeId, { 
+                phoneme: phoneme, 
+                word: token 
+            });
         }, scaledTime);
         
         googleTimeouts.push(timeout);
