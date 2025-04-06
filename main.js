@@ -161,23 +161,19 @@ function speakText(text) {
     utterance.rate = parseFloat(rateSlider.value);
     utterance.pitch = parseFloat(pitchSlider.value);
 
-    // Set up the boundary event handler to highlight words as they're spoken
+    // Enhanced boundary handler for both word highlighting and viseme animation
     utterance.onboundary = (event) => {
         if (event.name === 'word') {
             // Get the current word from the text based on character index
             const currentWordText = text.substring(event.charIndex, event.charIndex + event.charLength).trim();
             
             if (currentWordText) {
-                // Find the word index in our tokens, with improved punctuation handling
+                // Find the word index in our tokens
                 let wordIndex = -1;
                 let charCount = 0;
                 
                 // Use a more sophisticated tokenization that keeps punctuation with words
-                const tokens = text.split(/\s+/).map(token => {
-                    // For tokens that contain punctuation, we want to keep them as single units
-                    // This makes "Hello!" a single token rather than two separate tokens
-                    return token.trim();
-                }).filter(token => token.length > 0);
+                const tokens = text.split(/\s+/).map(token => token.trim()).filter(token => token.length > 0);
                 
                 // Find which token contains the current character index
                 for (let i = 0; i < tokens.length; i++) {
@@ -185,67 +181,80 @@ function speakText(text) {
                     const endPos = charCount + tokens[i].length;
                     
                     // Check if the event's character index falls within this token
-                    // Also handle the case where the boundary might be at punctuation within a word
+                    // or if the token contains the current word text
                     if ((charCount <= event.charIndex && event.charIndex < endPos) || 
                         (tokens[i].includes(currentWordText))) {
                         wordIndex = i;
                         break;
                     }
                     
-                    // Move to the next token, account for the token and the space after it
-                    charCount += tokens[i].length + 1;
+                    // Move to the next token position
+                    charCount += tokens[i].length + 1; // +1 for the space
                 }
                 
                 if (wordIndex >= 0) {
-                    // Directly highlight the current word
+                    // Highlight the current word
                     highlightWord(wordIndex, text);
                     
-                    // Clean the word to get phonemes (strip punctuation)
+                    // Extract and animate the viseme sequence for this word
                     const cleanWord = currentWordText.replace(/[^\w\s]/g, '').toLowerCase();
-                    
-                    // Also update the viseme for the beginning of this word
                     const phonemes = getWordPhonemes(cleanWord);
+                    
                     if (phonemes.length > 0) {
-                        setVisemeImage(getVisemeFromPhoneme(phonemes[0]));
+                        // Set immediate viseme for the first phoneme
+                        const firstVisemeId = getVisemeFromPhoneme(phonemes[0]);
+                        setVisemeImage(firstVisemeId);
+                        
+                        // Check if the word has ending punctuation
+                        const hasPunctuation = /[.!?,;:]$/.test(tokens[wordIndex]);
+                        
+                        // Schedule the remaining visemes in this word with appropriate timing
+                        const totalDuration = (event.charLength * 70) / utterance.rate; // estimate 70ms per character, adjusted for rate
+                        
+                        // If this word has punctuation, we'll reserve some time at the end to close the mouth
+                        const effectivePhonemeCount = hasPunctuation ? phonemes.length + 1 : phonemes.length;
+                        const phonemeDuration = totalDuration / effectivePhonemeCount;
+                        
+                        // Clear any previously scheduled viseme timeouts to avoid conflicts
+                        for (const timeout of animationTimeouts) {
+                            clearTimeout(timeout);
+                        }
+                        
+                        // Empty the array without reassigning it
+                        animationTimeouts.splice(0, animationTimeouts.length);
+                        
+                        // Schedule visemes throughout the word duration
+                        phonemes.slice(1).forEach((phoneme, idx) => {
+                            const visemeId = getVisemeFromPhoneme(phoneme);
+                            const delay = (idx + 1) * phonemeDuration;
+                            
+                            // Create a timeout for this viseme
+                            const timeout = setTimeout(() => {
+                                setVisemeImage(visemeId);
+                                if (showPhonemesCheckbox.checked) {
+                                    console.debug(`Showing viseme ${visemeId} for phoneme ${phoneme}`);
+                                }
+                            }, delay);
+                            
+                            // Add to our animation timeouts array
+                            animationTimeouts.push(timeout);
+                        });
+                        
+                        // If word ends with punctuation, schedule a quick mouth close
+                        if (hasPunctuation) {
+                            const mouthCloseDelay = totalDuration - (phonemeDuration / 2); // Close mouth slightly before next word
+                            const timeout = setTimeout(() => {
+                                setVisemeImage(0); // Neutral mouth position (closed)
+                                if (showPhonemesCheckbox.checked) {
+                                    console.debug(`Closing mouth after punctuation in "${tokens[wordIndex]}"`);
+                                }
+                            }, mouthCloseDelay);
+                            animationTimeouts.push(timeout);
+                        }
                     }
                 }
             }
         }
-    };
-
-    // We'll still use our timing predictions for viseme animation (mouth movement)
-    // but not for word highlighting
-    utterance.onstart = () => {
-        statusMessage.textContent = `Speaking... (${detectedLanguage.charAt(0).toUpperCase() + detectedLanguage.slice(1)} detected)`;
-
-        // Schedule viseme changes based on calculated timing
-        visemeSequence.forEach(({ visemeId, time, phoneme }) => {
-            // Different anticipation offsets for different phoneme types
-            let anticipatoryOffset = langParams.anticipatoryOffset; // default offset from language params
-            
-            if (phoneme) {
-                // Plosives/stops need more anticipation (form earlier, release quickly)
-                if (['p', 'b', 't', 'd', 'k', 'g'].includes(phoneme)) {
-                    anticipatoryOffset = langParams.anticipatoryOffset * 1.5;
-                }
-                // Vowels need less anticipation as they extend over time
-                else if ('aeiouàáâäæãåāèéêëēėęîïíīįìôöòóœøōõûüùúūÿ'.includes(phoneme[0])) {
-                    anticipatoryOffset = langParams.anticipatoryOffset * 0.7;
-                }
-                // Fricatives need medium anticipation
-                else if (['f', 'v', 's', 'z', 'sh', 'zh', 'th', 'dh'].includes(phoneme)) {
-                    anticipatoryOffset = langParams.anticipatoryOffset * 1.1;
-                }
-            }
-            
-            // Apply rate adjustment - faster speech needs more anticipation
-            const rateAdjustedOffset = anticipatoryOffset * Math.pow(utterance.rate, 0.5);
-            const scaledTime = Math.max(0, (time - rateAdjustedOffset)) / utterance.rate;
-            const timeout = setTimeout(() => setVisemeImage(visemeId), scaledTime);
-            animationTimeouts.push(timeout);
-        });
-        
-        // We no longer pre-schedule word highlighting - that will be handled by the onboundary event
     };
 
     utterance.onend = () => {

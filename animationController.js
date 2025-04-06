@@ -151,11 +151,22 @@ export function generateVisemeSequence(text, showPhonemesChecked) {
         }
         
         // Extract the actual word content without punctuation for phoneme lookup
-        const wordContent = token.replace(/[^\w\s]/g, '');
+        const wordContent = token.replace(/[^\w\s]/g, '').toLowerCase();
+        if (!wordContent) {
+            // Pure punctuation token, treat as pause
+            currentTime += languageParams.tokenPausePunctuation;
+            return;
+        }
         
         // Get phonemes for the word content (without punctuation)
         const phonemes = getWordPhonemes(wordContent);
         if (!phonemes.length) return;
+        
+        // Improved timing calculations
+        // Calculate word duration based on number of syllables (approximated by vowel count)
+        const vowelCount = phonemes.filter(p => 'aeiou'.includes(p[0])).length;
+        const syllableCount = Math.max(1, vowelCount);
+        const wordDuration = syllableCount * 180; // base duration per syllable
         
         // Record the word boundary event - include both display token and cleaned word
         wordBoundaryEvents.push({ 
@@ -163,47 +174,105 @@ export function generateVisemeSequence(text, showPhonemesChecked) {
             wordIndex: wordIndex++, // Only count actual word tokens
             token: token,           // Full token with punctuation
             word: wordContent,      // Word without punctuation
-            duration: phonemes.length * Math.max(60, 100 - (phonemes.length * 5))
+            duration: wordDuration  // Store calculated word duration
         });
         
-        // More precise duration per phoneme
-        const baseDuration = Math.max(60, 100 - (phonemes.length * 5));
+        // The start time for this word's visemes
+        const wordStartTime = currentTime;
         
-        phonemes.forEach(phoneme => {
+        // Distribute visemes across the word duration
+        phonemes.forEach((phoneme, phonemeIndex) => {
             const visemeId = getVisemeFromPhoneme(phoneme);
-            visemeData.push({ time: currentTime, visemeId: visemeId, token: token, phoneme: phoneme });
-            phonemeData.push({ time: currentTime, phoneme: phoneme, visemeId: visemeId, word: wordContent });
             
-            // Refined duration adjustments for different phoneme types
-            let duration = baseDuration;
+            // More sophisticated duration calculation based on phoneme type
+            let phonemeDuration = 0;
             
-            // Apply language-specific timing adjustments
+            // Vowels last longer than consonants
             if ('aeiou'.includes(phoneme[0])) {
-                duration *= languageParams.vowelMultiplier;
+                phonemeDuration = wordDuration * 0.4 / syllableCount;
+            } 
+            // Consonant clusters need special handling
+            else if (['ch', 'jh', 'sh', 'zh', 'th', 'dh'].includes(phoneme)) {
+                phonemeDuration = wordDuration * 0.25 / phonemes.length;
+            }
+            // Stops need to be quicker
+            else if (['p', 'b', 't', 'd', 'k', 'g'].includes(phoneme)) {
+                phonemeDuration = wordDuration * 0.15 / phonemes.length;
+            }
+            // Standard consonants
+            else {
+                phonemeDuration = wordDuration * 0.2 / phonemes.length;
+            }
+            
+            // Apply language-specific multipliers to fine-tune timing
+            if ('aeiou'.includes(phoneme[0])) {
+                phonemeDuration *= languageParams.vowelMultiplier;
             } 
             else if (['ch', 'jh', 'sh', 'zh'].includes(phoneme)) {
-                duration *= languageParams.consonantMultiplier;
-            } 
-            else if (['p', 'b', 't', 'd', 'k', 'g'].includes(phoneme)) {
-                duration *= 0.8;
+                phonemeDuration *= languageParams.consonantMultiplier;
             }
             else if (phoneme === 'sp') {
-                duration *= languageParams.pauseMultiplier;
+                phonemeDuration *= languageParams.pauseMultiplier;
             }
             
-            currentTime += duration;
+            // For anticipatory coarticulation:
+            // Each phoneme starts at a position proportional to its index in the word
+            // This creates smoother transitions between mouth positions
+            const phoneticProgress = phonemeIndex / Math.max(1, phonemes.length - 1);
+            const anticipationFactor = 0.25; // How early we start anticipating the next sound
+            const phonemeTime = wordStartTime + (phoneticProgress - anticipationFactor) * wordDuration;
+            
+            // Don't let phoneme times go negative or overlap with previous word
+            const adjustedTime = Math.max(wordStartTime, phonemeTime); 
+            
+            // Add the viseme data for this phoneme
+            visemeData.push({ 
+                time: adjustedTime, 
+                visemeId: visemeId, 
+                token: token, 
+                phoneme: phoneme 
+            });
+            
+            phonemeData.push({ 
+                time: adjustedTime, 
+                phoneme: phoneme, 
+                visemeId: visemeId, 
+                word: wordContent 
+            });
         });
         
-        // Add a pause for punctuation if present
+        // Move the time cursor forward by this word's duration
+        currentTime += wordDuration;
+        
+        // Add additional pause for punctuation if present
         if (/[,.!?;:]/.test(token)) {
-            currentTime += languageParams.tokenPausePunctuation;
+            const punctuationType = token.match(/[,.!?;:]/)[0];
+            // Different punctuation adds different pause lengths
+            switch(punctuationType) {
+                case '.': 
+                case '!':
+                case '?':
+                    currentTime += languageParams.tokenPausePunctuation * 1.5; // Longer pause for end of sentence
+                    break;
+                case ',':
+                case ';':
+                case ':':
+                    currentTime += languageParams.tokenPausePunctuation; // Medium pause for mid-sentence breaks
+                    break;
+                default:
+                    currentTime += languageParams.tokenPauseWord; // Standard pause otherwise
+            }
         } else {
+            // Small pause between words
             currentTime += languageParams.tokenPauseWord;
         }
     });
     
+    // Sort viseme data by time to ensure proper sequence
+    visemeData.sort((a, b) => a.time - b.time);
+    
     // Append a final silent viseme to close mouth at end
-    visemeData.push({ time: currentTime, visemeId: 0, token: 'end', phoneme: 'silence' });
+    visemeData.push({ time: currentTime + 100, visemeId: 0, token: 'end', phoneme: 'silence' });
     
     // Update phoneme breakdown display if enabled
     if (showPhonemesChecked) {
