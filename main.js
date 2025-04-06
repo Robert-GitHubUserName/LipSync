@@ -7,6 +7,7 @@ import { getWordPhonemes, getVisemeFromPhoneme } from './phonemeProcessor.js';
 // Store animation state
 let googleTimeouts = []; // Specific for Google voice timeouts
 let isChromeBrowser = /Chrome/.test(navigator.userAgent) && !/Edge/.test(navigator.userAgent);
+let isEdgeBrowser = /Edg/.test(navigator.userAgent);
 
 // Language detection parameters
 const languagePatterns = {
@@ -148,6 +149,7 @@ function speakText(text) {
     const voices = speechSynthesis.getVoices();
     let voiceLang = '';
     let isGoogleVoice = false;
+    let isMicrosoftVoice = false;
     
     // Only set a voice if we have valid voices and a valid selection
     if (voices.length > 0 && voiceSelect.value !== '') {
@@ -159,6 +161,10 @@ function speakText(text) {
             // Check if this is a Google voice
             isGoogleVoice = voices[voiceIndex].name.includes('Google') || 
                            voices[voiceIndex].voiceURI.includes('google');
+            
+            // Check if this is a Microsoft voice
+            isMicrosoftVoice = voices[voiceIndex].name.includes('Microsoft') || 
+                              (isEdgeBrowser && voices[voiceIndex].localService === true);
         }
     }
 
